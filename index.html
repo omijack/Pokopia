@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <title>APNEA SIMULATOR</title>
-  <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+  <link rel="icon" type="image/png" href="assets/charmander.png">
+  <script src="assets/vendor/phaser.min.js"></script>
   <style>
     /* ----------- Reset bàsic per a 100% de pantalla ----------- */
     html, body {
@@ -24,34 +25,39 @@
     #gameContainer canvas {
       display: block;
       margin: 0 auto;
-      image-rendering: pixelated; /* per pixel art */
+      image-rendering: auto;
     }
 
     /* ----------- Estils UI sobreposada ----------- */
     #diveButton, #retryButton {
       position: absolute; top: 70px; left: 50%; transform: translateX(-50%);
       padding: 10px 30px; font-size: 16px; z-index: 10;
-      color: #fff;
-      background: repeating-linear-gradient(45deg,
-        #5e3a8c,#5e3a8c 10px,#472c74 10px,#472c74 20px);
-      border: 4px solid #cc99ff; box-shadow: 0 0 10px #cc99ff;
-      font-family: monospace; cursor: pointer; display: none;
+      color: #5b3d58;
+      background: linear-gradient(135deg, #ffd5e7, #c8f4d4);
+      border: 4px solid #fff7c8;
+      border-radius: 18px;
+      box-shadow: 0 6px 0 #f5a7c9, 0 0 18px rgba(255, 213, 231, 0.75);
+      font-family: monospace; font-weight: 700; cursor: pointer; display: none;
     }
     #retryButton { top: 60px; display: none; }
 
     #timer {
       position: absolute; top: 120px; left: 50%; transform: translateX(-50%);
-      font-size: 24px; color: #fff; z-index: 10; display: none;
+      font-size: 24px; color: #fff7c8; z-index: 10; display: none;
+      font-family: monospace; font-weight: 700;
+      text-shadow: 2px 2px 0 #5b3d58;
     }
     #finalScore {
       position: absolute; top: 150px; left: 50%; transform: translateX(-50%);
-      font-size: 36px; color: yellow; font-weight: bold;
+      font-size: 36px; color: #fff7c8; font-weight: bold;
       display: none; z-index: 10;
+      font-family: monospace;
+      text-shadow: 2px 2px 0 #5b3d58;
     }
 
     #leaderboard {
       position: absolute; top: 60vh; left: 50%; transform: translateX(-50%);
-      font-family: monospace; font-size: 20px; color: #411c66;
+      font-family: monospace; font-size: 20px; color: #5b3d58;
       display: none; z-index: 20; text-align: center;
       background: none; padding: 0; border: none;
     }
@@ -64,7 +70,7 @@
 
     #selectedApneista {
       position: absolute; bottom: 20px; left: 20px;
-      font-family: monospace; font-size: 20px; color: #cc99ff;
+      font-family: monospace; font-size: 20px; color: #ffd5e7;
       display: none; z-index: 10;
     }
   </style>
@@ -74,10 +80,10 @@
   <div id="gameContainer"></div>
 
   <!-- UI HTML superposada -->
-  <button id="diveButton">Dive!</button>
+  <button id="diveButton">Busseja</button>
   <button id="retryButton">INICI</button>
   <div id="timer">00:00:00</div>
-  <div id="finalScore">Final Time: 00:00:00</div>
+  <div id="finalScore">Temps final: 00:00:00</div>
   <div id="leaderboard">
     <strong>Top 5:</strong>
     <ol id="scoreList"></ol>
@@ -85,14 +91,25 @@
   <div id="selectedApneista"></div>
 
 <script>
+const GAME_WIDTH = 800;
+const GAME_HEIGHT = 600;
+const RENDER_SCALE = Math.min(Math.max(window.devicePixelRatio || 1, 3), 3);
+
 const config = {
   type: Phaser.AUTO,
   parent: 'gameContainer',    // <— assignem el contenidor responsive
-  width: 800,
-  height: 600,
+  width: GAME_WIDTH,
+  height: GAME_HEIGHT,
+  resolution: RENDER_SCALE,
   scale: {
     mode: Phaser.Scale.FIT,            // FIT per ajustar sense deformar
     autoCenter: Phaser.Scale.CENTER_BOTH
+  },
+  render: {
+    antialias: true,
+    antialiasGL: true,
+    pixelArt: false,
+    roundPixels: false
   },
   physics: { default: 'arcade' },
   scene: { preload, create, update }
@@ -101,14 +118,789 @@ const config = {
 let game = new Phaser.Game(config);
 let background, beachImage, diver;
 let scrollSpeed = 0.1, isScrolling = false, elapsedTime = 0;
-let menuMusic, gameMusic, sfxSelect, sfxSplash, sfxWaves;
-let presentacio, menuInici, jugarText, canviText;
+let menuMusic, gameMusic, pokopiaMusic, rewardMusic, sfxSelect, sfxSplash, sfxWaves;
+let presentacio, menuInici, jugarText, canviText, menuDecor, dialogueScene, challengeScene, rewardScene;
 let diverSelection = 'cartu';
+const REWARD_LOCATION_TEXT = 'Ves a buscar el Charmander, ell guarda el teu regalet!';
+const manualButtons = [];
+
+const pastel = {
+  leaf: 0x8ad7a3,
+  leafDark: 0x5dbd86,
+  pink: 0xffb6d5,
+  rose: 0xf28fbd,
+  cream: 0xfff7c8,
+  mint: 0xc8f4d4,
+  sky: 0xbfefff,
+  lavender: 0xd8c7ff,
+  text: '#5b3d58'
+};
+
+function stopMusic(){
+  [menuMusic, gameMusic, pokopiaMusic, rewardMusic].forEach(track=>{
+    if(track && track.isPlaying) track.stop();
+  });
+}
+
+function playPokopiaMusic(){
+  if(rewardMusic && rewardMusic.isPlaying) rewardMusic.stop();
+  if(menuMusic && menuMusic.isPlaying) menuMusic.stop();
+  if(gameMusic && gameMusic.isPlaying) gameMusic.stop();
+  if(pokopiaMusic && !pokopiaMusic.isPlaying) pokopiaMusic.play();
+}
+
+function playRewardMusic(){
+  stopMusic();
+  if(rewardMusic && !rewardMusic.isPlaying) rewardMusic.play();
+}
+
+function pointerToGamePoint(pointerEvent){
+  const canvas = game.canvas;
+  const rect = canvas.getBoundingClientRect();
+  return {
+    x: (pointerEvent.clientX - rect.left) * (GAME_WIDTH / rect.width),
+    y: (pointerEvent.clientY - rect.top) * (GAME_HEIGHT / rect.height)
+  };
+}
+
+function setupManualInput(){
+  const canvas = game.canvas;
+  canvas.style.cursor = 'default';
+
+  canvas.addEventListener('pointermove', (event)=>{
+    const point = pointerToGamePoint(event);
+    let hovering = false;
+
+    manualButtons.forEach(button=>{
+      if(!button.enabled || !button.owner.active) return;
+      const inside = Phaser.Geom.Rectangle.Contains(button.bounds, point.x, point.y);
+      hovering = hovering || inside;
+
+      if(inside && !button.hovered){
+        button.hovered = true;
+        if(button.onHover) button.onHover(true);
+      } else if(!inside && button.hovered){
+        button.hovered = false;
+        if(button.onHover) button.onHover(false);
+      }
+    });
+
+    canvas.style.cursor = hovering ? 'pointer' : 'default';
+  });
+
+  canvas.addEventListener('pointerdown', (event)=>{
+    const point = pointerToGamePoint(event);
+    for(let i = manualButtons.length - 1; i >= 0; i--){
+      const button = manualButtons[i];
+      if(!button.enabled || !button.owner.active) continue;
+      if(Phaser.Geom.Rectangle.Contains(button.bounds, point.x, point.y)){
+        event.preventDefault();
+        button.onClick();
+        return;
+      }
+    }
+  });
+}
+
+function registerManualButton(owner, bounds, onClick, onHover){
+  const button = {
+    owner,
+    bounds: new Phaser.Geom.Rectangle(bounds.x, bounds.y, bounds.width, bounds.height),
+    onClick,
+    onHover,
+    enabled: true,
+    hovered: false
+  };
+
+  manualButtons.push(button);
+  owner.once(Phaser.GameObjects.Events.DESTROY, ()=>{
+    button.enabled = false;
+    const index = manualButtons.indexOf(button);
+    if(index !== -1) manualButtons.splice(index, 1);
+  });
+
+  return button;
+}
+
+function enableCrispText(scene){
+  const originalTextFactory = scene.add.text.bind(scene.add);
+  scene.add.text = (x, y, text, style = {})=>{
+    const crispStyle = {
+      resolution: RENDER_SCALE,
+      ...style
+    };
+    return originalTextFactory(x, y, text, crispStyle);
+  };
+}
+
+function roundedPanel(scene, x, y, width, height, fill, stroke, depth){
+  const panel = scene.add.graphics().setDepth(depth);
+  panel.fillStyle(0x3d7f80, 0.18);
+  panel.fillRoundedRect(x - width / 2 + 10, y - height / 2 + 12, width, height, 26);
+  panel.fillStyle(0xffffff, 0.62);
+  panel.fillRoundedRect(x - width / 2 - 4, y - height / 2 - 4, width + 8, height + 8, 28);
+  panel.fillStyle(fill, 0.96);
+  panel.lineStyle(5, stroke, 1);
+  panel.fillRoundedRect(x - width / 2, y - height / 2, width, height, 24);
+  panel.strokeRoundedRect(x - width / 2, y - height / 2, width, height, 24);
+  panel.lineStyle(2, 0xffffff, 0.72);
+  panel.strokeRoundedRect(x - width / 2 + 10, y - height / 2 + 10, width - 20, height - 20, 18);
+  return panel;
+}
+
+function drawPastelBackdrop(scene, depth = 0){
+  const g = scene.add.graphics().setDepth(depth);
+
+  g.fillGradientStyle(0x8ee9ff, 0xbff7ff, 0xffd8ec, 0xd7f8a8, 1);
+  g.fillRect(0, 0, 800, 600);
+
+  g.fillStyle(0xffffff, 0.22);
+  for(let i = 0; i < 12; i++){
+    const angle = (Math.PI * 2 * i) / 12;
+    g.fillTriangle(
+      638, 92,
+      638 + Math.cos(angle - 0.03) * 560, 92 + Math.sin(angle - 0.03) * 560,
+      638 + Math.cos(angle + 0.03) * 560, 92 + Math.sin(angle + 0.03) * 560
+    );
+  }
+
+  g.fillStyle(0xfff08a, 1);
+  g.fillCircle(650, 90, 58);
+  g.fillStyle(0xfff9cf, 0.8);
+  g.fillCircle(650, 90, 42);
+  g.fillStyle(0xffffff, 0.86);
+  [[90, 120, 70], [145, 110, 52], [610, 170, 58], [670, 158, 42], [355, 92, 34], [395, 84, 26]].forEach(([x, y, r])=>{
+    g.fillCircle(x, y, r);
+  });
+
+  g.fillStyle(0x7fd78d, 1);
+  g.fillRoundedRect(24, 384, 190, 130, 28);
+  g.fillRoundedRect(548, 344, 210, 160, 28);
+  g.fillStyle(0x55b980, 1);
+  for(let x = 22; x < 800; x += 54){
+    g.fillTriangle(x, 430, x + 34, 350 + (x % 4) * 11, x + 72, 430);
+  }
+  g.fillStyle(0xb4ec71, 1);
+  g.fillEllipse(400, 500, 930, 215);
+  g.fillStyle(0x8bdc7a, 1);
+  g.fillEllipse(390, 552, 860, 130);
+
+  g.fillStyle(0xffb6d5, 1);
+  [[170,420], [620,385], [720,455], [88,480]].forEach(([x, y])=>{
+    g.fillCircle(x - 10, y, 9);
+    g.fillCircle(x + 10, y, 9);
+    g.fillCircle(x, y - 10, 9);
+    g.fillCircle(x, y + 10, 9);
+    g.fillStyle(0xfff7c8, 1);
+    g.fillCircle(x, y, 6);
+    g.fillStyle(0xffb6d5, 1);
+  });
+
+  [[112,250], [238,185], [510,238], [735,205], [315,462], [455,420]].forEach(([x, y], idx)=>{
+    g.fillStyle(idx % 2 ? 0xfff7c8 : 0xffffff, 0.88);
+    g.fillTriangle(x, y - 12, x + 4, y, x, y + 12);
+    g.fillTriangle(x - 12, y, x, y - 4, x + 12, y);
+  });
+
+  g.lineStyle(5, 0xffffff, 0.7);
+  for(let y = 505; y <= 570; y += 30){
+    g.beginPath();
+    g.moveTo(0, y);
+    for(let x = 0; x <= 820; x += 40){
+      g.lineTo(x, y + Math.sin(x / 40) * 9);
+    }
+    g.strokePath();
+  }
+
+  return g;
+}
+
+function drawRewardBackdrop(scene, depth = 0){
+  const g = scene.add.graphics().setDepth(depth);
+
+  g.fillGradientStyle(0x6ee7ff, 0x9cf3ff, 0xfff6a8, 0xb8f06b, 1);
+  g.fillRect(0, 0, 800, 600);
+
+  g.fillStyle(0xffffff, 0.42);
+  for(let i = 0; i < 18; i++){
+    const angle = (Math.PI * 2 * i) / 18;
+    g.fillTriangle(
+      400, 260,
+      400 + Math.cos(angle - 0.035) * 760, 260 + Math.sin(angle - 0.035) * 760,
+      400 + Math.cos(angle + 0.035) * 760, 260 + Math.sin(angle + 0.035) * 760
+    );
+  }
+
+  g.fillStyle(0xffffff, 0.92);
+  [[95,88,48], [135,76,34], [595,90,40], [635,82,58], [690,98,34], [330,130,30], [365,120,42]].forEach(([x, y, r])=>{
+    g.fillCircle(x, y, r);
+  });
+
+  g.fillStyle(0x78d857, 1);
+  for(let x = -30; x <= 860; x += 76){
+    g.fillTriangle(x, 370, x + 55, 282 + (x % 4) * 8, x + 115, 370);
+  }
+  g.fillStyle(0x9ee86a, 1);
+  g.fillEllipse(400, 470, 920, 250);
+  g.fillStyle(0x68c94e, 1);
+  g.fillEllipse(410, 515, 860, 145);
+
+  [[72,368], [150,420], [670,382], [730,450], [515,395]].forEach(([x, y])=>{
+    g.fillStyle(0xfff05a, 1);
+    g.fillCircle(x, y, 7);
+    g.fillStyle(0xff8fb8, 1);
+    g.fillCircle(x - 9, y, 7);
+    g.fillCircle(x + 9, y, 7);
+    g.fillCircle(x, y - 9, 7);
+    g.fillCircle(x, y + 9, 7);
+  });
+
+  const confetti = [
+    [62,180,0xff5aa5], [118,258,0xffdd4a], [215,155,0x48d9ff],
+    [580,162,0xff7a4a], [708,214,0x7df27a], [744,320,0xffdd4a],
+    [458,105,0xff5aa5], [330,210,0x7df27a], [250,330,0x48d9ff]
+  ];
+  confetti.forEach(([x, y, color], idx)=>{
+    g.fillStyle(color, 1);
+    g.fillRoundedRect(x, y, idx % 2 ? 18 : 10, idx % 2 ? 7 : 16, 3);
+  });
+
+  return g;
+}
+
+function pastelText(scene, x, y, text, size, color = pastel.text, depth = 2){
+  return scene.add.text(x, y, text, {
+    fontFamily: 'monospace',
+    fontSize: `${size}px`,
+    color,
+    fontStyle: 'bold',
+    align: 'center',
+    stroke: '#ffffff',
+    strokeThickness: 5
+  }).setOrigin(0.5).setDepth(depth);
+}
+
+function menuButton(scene, x, y, text, size){
+  const container = scene.add.container(0, 0);
+  const label = scene.add.text(0, 0, text, {
+    fontFamily: 'monospace',
+    fontSize: `${size}px`,
+    color: pastel.text,
+    fontStyle: 'bold',
+    align: 'center'
+  }).setOrigin(0.5).setStroke('#fff7c8', 5);
+
+  const width = label.width + 48;
+  const height = label.height + 24;
+  const bg = scene.add.graphics();
+  container.setPosition(x - width / 2, y - height / 2);
+  label.setPosition(width / 2, height / 2);
+
+  const draw = (fill)=>{
+    bg.clear();
+    bg.fillStyle(0x8b5c7c, 0.22);
+    bg.fillRoundedRect(4, 7, width, height, 14);
+    bg.fillStyle(0xffffff, 0.7);
+    bg.fillRoundedRect(-3, -3, width + 6, height + 6, 16);
+    bg.fillStyle(fill, 1);
+    bg.lineStyle(4, 0xfff7c8, 1);
+    bg.fillRoundedRect(0, 0, width, height, 14);
+    bg.strokeRoundedRect(0, 0, width, height, 14);
+    bg.fillStyle(0xffffff, 0.28);
+    bg.fillRoundedRect(10, 8, width - 20, Math.max(8, height * 0.28), 8);
+  };
+
+  draw(0xffd5e7);
+  container.add([bg, label]);
+  container.setSize(width, height);
+  container.manualBounds = { x: x - width / 2 - 3, y: y - height / 2 - 3, width: width + 10, height: height + 13 };
+  container.manualHover = (hovered)=> draw(hovered ? 0xc8f4d4 : 0xffd5e7);
+
+  return container;
+}
+
+function tickButton(scene, x, y){
+  const container = scene.add.container(0, 0);
+  const width = 92;
+  const height = 48;
+  const bg = scene.add.graphics();
+  const mark = scene.add.graphics();
+  container.setPosition(x - width / 2, y - height / 2);
+
+  const draw = (fill, scale = 1)=>{
+    bg.clear();
+    bg.fillStyle(0x2e8c52, 0.25);
+    bg.fillRoundedRect(4, 7, width, height, 14);
+    bg.fillStyle(0xffffff, 0.72);
+    bg.fillRoundedRect(-3, -3, width + 6, height + 6, 16);
+    bg.fillStyle(fill, 1);
+    bg.lineStyle(4, 0xffffff, 1);
+    bg.fillRoundedRect(0, 0, width, height, 14);
+    bg.strokeRoundedRect(0, 0, width, height, 14);
+    bg.fillStyle(0xffffff, 0.3);
+    bg.fillRoundedRect(10, 7, width - 20, 13, 7);
+
+    mark.clear();
+    mark.lineStyle(7, 0xffffff, 1);
+    mark.beginPath();
+    mark.moveTo(width / 2 - 24 * scale, height / 2);
+    mark.lineTo(width / 2 - 8 * scale, height / 2 + 15 * scale);
+    mark.lineTo(width / 2 + 26 * scale, height / 2 - 16 * scale);
+    mark.strokePath();
+  };
+
+  draw(0x54c96b);
+  container.add([bg, mark]);
+  container.setSize(width, height);
+  container.manualBounds = { x: x - width / 2 - 3, y: y - height / 2 - 3, width: width + 10, height: height + 13 };
+  container.manualHover = (hovered)=> draw(hovered ? 0x68dc7e : 0x54c96b, 1);
+
+  return container;
+}
+
+function respostaButton(scene, x, y, width, text, onClick){
+  const height = 48;
+  const container = scene.add.container(x, y - height / 2).setDepth(124);
+  const bg = scene.add.graphics();
+
+  const draw = (fill)=>{
+    bg.clear();
+    bg.fillStyle(0x7b6c75, 0.18);
+    bg.fillRoundedRect(4, 6, width, height, 18);
+    bg.fillStyle(0xffffff, 0.65);
+    bg.fillRoundedRect(-2, -2, width + 4, height + 4, 20);
+    bg.fillStyle(fill, 1);
+    bg.lineStyle(4, 0xffffff, 1);
+    bg.fillRoundedRect(0, 0, width, height, 18);
+    bg.strokeRoundedRect(0, 0, width, height, 18);
+    bg.fillStyle(0xffffff, 0.22);
+    bg.fillRoundedRect(12, 8, width - 24, 11, 8);
+  };
+
+  const label = scene.add.text(18, height / 2, text, {
+    fontFamily: 'monospace',
+    fontSize: '16px',
+    color: pastel.text,
+    fontStyle: 'bold',
+    align: 'left',
+    wordWrap: { width: width - 36, useAdvancedWrap: true }
+  }).setOrigin(0, 0.5).setDepth(1);
+
+  label.setStroke('#ffffff', 4);
+  draw(0xfff17a);
+  container.add([bg, label]);
+  container.setSize(width, height);
+  registerManualButton(
+    container,
+    { x: x - 2, y: y - height / 2 - 2, width: width + 6, height: height + 8 },
+    onClick,
+    (hovered)=> draw(hovered ? 0xc8f4d4 : 0xfff17a)
+  );
+
+  return {
+    destroy(){
+      container.destroy();
+    }
+  };
+}
+
+function drawProgressRing(scene, x, y, radius, progress, depth, color = 0x8f78dd){
+  const ring = scene.add.graphics().setDepth(depth);
+  ring.lineStyle(9, 0xdff5ff, 1);
+  ring.beginPath();
+  ring.arc(x, y, radius, Phaser.Math.DegToRad(-90), Phaser.Math.DegToRad(270), false);
+  ring.strokePath();
+  ring.lineStyle(9, color, 1);
+  ring.beginPath();
+  ring.arc(x, y, radius, Phaser.Math.DegToRad(-90), Phaser.Math.DegToRad(-90 + 360 * progress), false);
+  ring.strokePath();
+  return ring;
+}
+
+function repteCard(scene, x, y, width, height, title, icon, progressLabel, reward, highlighted, depth){
+  const card = scene.add.container(0, 0).setDepth(depth);
+  const g = scene.add.graphics();
+  const fill = highlighted ? 0xffe66b : 0x73d7ea;
+  const stroke = highlighted ? 0xffffff : 0x84ebf1;
+  const inner = highlighted ? 0xfff8c8 : 0xfff1c7;
+
+  g.fillStyle(0xb58b3d, 0.22);
+  g.fillRoundedRect(x + 10, y + 12, width, height, 20);
+  g.fillStyle(0xffffff, 0.76);
+  g.fillRoundedRect(x - 5, y - 5, width + 10, height + 10, 22);
+  g.fillStyle(fill, highlighted ? 0.98 : 0.62);
+  g.lineStyle(highlighted ? 5 : 3, stroke, 1);
+  g.fillRoundedRect(x, y, width, height, 18);
+  g.strokeRoundedRect(x, y, width, height, 18);
+  g.fillStyle(0xffffff, 0.25);
+  g.fillRoundedRect(x + 18, y + 14, width - 36, 46, 16);
+  g.fillStyle(inner, highlighted ? 1 : 0.82);
+  g.fillRoundedRect(x + 24, y + 70, width - 170, 118, 16);
+  g.lineStyle(3, 0xffffff, 0.72);
+  g.strokeRoundedRect(x + 24, y + 70, width - 170, 118, 16);
+
+  const titleText = scene.add.text(x + width / 2, y + 36, title, {
+    fontFamily: 'monospace',
+    fontSize: highlighted ? '34px' : '17px',
+    color: pastel.text,
+    fontStyle: 'bold',
+    align: 'center',
+    wordWrap: { width: width - 40, useAdvancedWrap: true }
+  }).setOrigin(0.5);
+
+  const iconText = scene.add.text(x + 54, y + 104, icon, {
+    fontFamily: 'monospace',
+    fontSize: highlighted ? '48px' : '38px',
+    color: pastel.text,
+    fontStyle: 'bold'
+  });
+
+  const rewardText = scene.add.text(x + width / 2 - 50, y + height - 36, reward, {
+    fontFamily: 'monospace',
+    fontSize: '18px',
+    color: pastel.text,
+    fontStyle: 'bold',
+    backgroundColor: '#f5fbff',
+    padding: { x: 14, y: 4 }
+  }).setOrigin(0.5);
+
+  const ring = drawProgressRing(scene, x + width - 78, y + 130, highlighted ? 52 : 34, highlighted ? 0 : 0.35, depth + 1);
+  const progress = scene.add.text(x + width - 78, y + 128, progressLabel, {
+    fontFamily: 'monospace',
+    fontSize: highlighted ? '30px' : '20px',
+    color: pastel.text,
+    fontStyle: 'bold',
+    align: 'center'
+  }).setOrigin(0.5);
+
+  card.add([g, titleText, iconText, rewardText, ring, progress]);
+  if(!highlighted) card.setAlpha(0.68);
+  return card;
+}
+
+function mostrarPantallaRepte(scene){
+  const bg = drawPastelBackdrop(scene, 130);
+  const overlay = scene.add.graphics().setDepth(131);
+  overlay.fillStyle(0x76d7ef, 0.34);
+  overlay.fillRoundedRect(0, 0, 800, 600, 0);
+
+  const title = pastelText(scene, 400, 48, 'GENERADOR DE RECOMPENSES', 34, '#ffffff', 134);
+  title.setStroke('#5b91b1', 6);
+  const subtitle = pastelText(scene, 400, 88, "repte especial d'aniversari", 20, '#fff7c8', 134);
+  subtitle.setStroke('#5b91b1', 5);
+
+  const cardC = repteCard(scene, 160, 132, 480, 254, 'Rega 5 plantes', 'PLANTES', '0/5', '100', true, 134);
+
+  const infoPanel = scene.add.graphics().setDepth(140);
+  infoPanel.fillStyle(0x5a66d8, 0.26);
+  infoPanel.fillRoundedRect(146, 438, 524, 104, 24);
+  infoPanel.fillStyle(0x106fc6, 0.98);
+  infoPanel.lineStyle(6, 0xffffff, 1);
+  infoPanel.fillRoundedRect(138, 430, 524, 104, 24);
+  infoPanel.strokeRoundedRect(138, 430, 524, 104, 24);
+  infoPanel.lineStyle(3, 0x8feaff, 1);
+  infoPanel.strokeRoundedRect(150, 442, 500, 80, 18);
+
+  const info = scene.add.text(400, 459, 'RECOMPENSA BLOQUEJADA', {
+    fontFamily: 'monospace',
+    fontSize: '24px',
+    color: '#fff7c8',
+    fontStyle: 'bold',
+    align: 'center'
+  }).setOrigin(0.5).setDepth(141);
+  const detail = scene.add.text(400, 499, 'Completa el repte: rega 5 plantes per activar el bonus.', {
+    fontFamily: 'monospace',
+    fontSize: '17px',
+    color: '#ffffff',
+    fontStyle: 'bold',
+    align: 'center',
+    wordWrap: { width: 470, useAdvancedWrap: true }
+  }).setOrigin(0.5).setDepth(141);
+
+  const start = tickButton(scene, 400, 560).setDepth(142);
+  registerManualButton(start, start.manualBounds, ()=>{
+    sfxSelect.play();
+    challengeScene.destroy();
+    mostrarPantallaRecompensaProfessor(scene);
+  }, start.manualHover);
+
+  challengeScene = scene.add.container(0, 0, [
+    bg, overlay, title, subtitle, cardC, infoPanel, info, detail, start
+  ]).setDepth(130).setAlpha(0);
+
+  scene.tweens.add({ targets: challengeScene, alpha: 1, duration: 500 });
+}
+
+function mostrarPantallaRecompensaProfessor(scene){
+  playRewardMusic();
+
+  const bg = drawRewardBackdrop(scene, 150);
+  const glow = scene.add.graphics().setDepth(151);
+  glow.fillStyle(0xffffff, 0.38);
+  glow.fillCircle(245, 278, 154);
+  glow.lineStyle(10, 0xfff075, 0.48);
+  glow.strokeCircle(245, 278, 148);
+
+  const professor = scene.add.image(245, 286, 'professorTangrouth')
+    .setDisplaySize(292, 292)
+    .setDepth(152);
+
+  const charmander = scene.add.image(675, 392, 'charmanderReward')
+    .setDisplaySize(170, 170)
+    .setDepth(164);
+
+  const prizeShadow = scene.add.graphics().setDepth(153);
+  prizeShadow.fillStyle(0x338f5b, 0.35);
+  prizeShadow.fillRoundedRect(302, 130, 430, 318, 30);
+
+  const dialogBox = scene.add.graphics().setDepth(160);
+  dialogBox.fillStyle(0xfff8d7, 1);
+  dialogBox.lineStyle(8, 0xffffff, 1);
+  dialogBox.fillRoundedRect(290, 104, 460, 330, 32);
+  dialogBox.strokeRoundedRect(290, 104, 460, 330, 32);
+  dialogBox.lineStyle(5, 0xffca42, 1);
+  dialogBox.strokeRoundedRect(302, 116, 436, 306, 24);
+
+  const ribbon = scene.add.graphics().setDepth(161);
+  ribbon.fillStyle(0xff5aa5, 1);
+  ribbon.fillRoundedRect(332, 78, 376, 62, 18);
+  ribbon.lineStyle(5, 0xffffff, 1);
+  ribbon.strokeRoundedRect(332, 78, 376, 62, 18);
+  ribbon.fillStyle(0xffdd4a, 1);
+  ribbon.fillTriangle(344, 140, 386, 140, 365, 174);
+  ribbon.fillTriangle(656, 140, 698, 140, 677, 174);
+
+  const ribbonText = scene.add.text(520, 109, 'PREMI ESPECIAL', {
+    fontFamily: 'monospace',
+    fontSize: '26px',
+    color: '#ffffff',
+    fontStyle: 'bold',
+    align: 'center'
+  }).setOrigin(0.5).setDepth(162).setStroke('#8c3b72', 5);
+
+  const title = scene.add.text(520, 188, 'RECOMPENSA\nDESBLOQUEJADA!', {
+    fontFamily: 'monospace',
+    fontSize: '34px',
+    color: '#5b2d5a',
+    fontStyle: 'bold',
+    align: 'center',
+    lineSpacing: 8,
+    wordWrap: { width: 390, useAdvancedWrap: true }
+  }).setOrigin(0.5).setDepth(162).setStroke('#ffffff', 6);
+
+  const messagePanel = scene.add.graphics().setDepth(161);
+  messagePanel.fillStyle(0xffffff, 0.92);
+  messagePanel.lineStyle(4, 0x7de878, 1);
+  messagePanel.fillRoundedRect(340, 265, 360, 94, 20);
+  messagePanel.strokeRoundedRect(340, 265, 360, 94, 20);
+
+  const message = scene.add.text(520, 312, REWARD_LOCATION_TEXT, {
+    fontFamily: 'monospace',
+    fontSize: '18px',
+    color: '#4e3151',
+    fontStyle: 'bold',
+    align: 'center',
+    lineSpacing: 6,
+    wordWrap: { width: 320, useAdvancedWrap: true }
+  }).setOrigin(0.5).setDepth(162);
+
+  const hintButton = scene.add.container(42, 515).setDepth(166);
+  const hintBg = scene.add.graphics();
+  hintBg.fillStyle(0xfff8d7, 1);
+  hintBg.lineStyle(4, 0xffca42, 1);
+  hintBg.fillRoundedRect(0, 0, 128, 46, 14);
+  hintBg.strokeRoundedRect(0, 0, 128, 46, 14);
+  const hintLabel = scene.add.text(64, 23, 'PISTA', {
+    fontFamily: 'monospace',
+    fontSize: '20px',
+    color: '#5b2d5a',
+    fontStyle: 'bold',
+    align: 'center'
+  }).setOrigin(0.5).setStroke('#ffffff', 4);
+  hintButton.add([hintBg, hintLabel]);
+  hintButton.setSize(128, 46);
+
+  const hintPanel = scene.add.container(34, 378).setDepth(167).setVisible(false);
+  const hintPanelBg = scene.add.graphics();
+  hintPanelBg.fillStyle(0xffffff, 0.96);
+  hintPanelBg.lineStyle(5, 0x7de878, 1);
+  hintPanelBg.fillRoundedRect(0, 0, 250, 126, 20);
+  hintPanelBg.strokeRoundedRect(0, 0, 250, 126, 20);
+  const hintPchan = scene.add.image(52, 62, 'pchan').setDisplaySize(70, 60);
+  const hintText = scene.add.text(98, 24, 'Pregunta al Pokémon Baconet perquè et guiï fins al Charmander.', {
+    fontFamily: 'monospace',
+    fontSize: '15px',
+    color: '#4e3151',
+    fontStyle: 'bold',
+    align: 'left',
+    lineSpacing: 4,
+    wordWrap: { width: 132, useAdvancedWrap: true }
+  });
+  hintPanel.add([hintPanelBg, hintPchan, hintText]);
+
+  registerManualButton(
+    hintButton,
+    { x: 42, y: 515, width: 128, height: 46 },
+    ()=>{},
+    (hovered)=>{
+      hintPanel.setVisible(hovered);
+      hintBg.clear();
+      hintBg.fillStyle(hovered ? 0xffdd4a : 0xfff8d7, 1);
+      hintBg.lineStyle(4, 0xffca42, 1);
+      hintBg.fillRoundedRect(0, 0, 128, 46, 14);
+      hintBg.strokeRoundedRect(0, 0, 128, 46, 14);
+    }
+  );
+
+  const sparkle = scene.add.graphics().setDepth(163);
+  [[322,154,18], [716,152,14], [704,398,12], [315,400,14], [620,232,10]].forEach(([x, y, r])=>{
+    sparkle.fillStyle(0xffffff, 0.95);
+    sparkle.fillTriangle(x, y - r, x + r / 3, y, x, y + r);
+    sparkle.fillTriangle(x, y - r, x - r / 3, y, x, y + r);
+    sparkle.fillTriangle(x - r, y, x, y - r / 3, x + r, y);
+    sparkle.fillTriangle(x - r, y, x, y + r / 3, x + r, y);
+  });
+
+  rewardScene = scene.add.container(0, 0, [
+    bg, glow, professor, prizeShadow, dialogBox, ribbon, ribbonText, title, messagePanel, message, sparkle, charmander, hintButton, hintPanel
+  ]).setDepth(150).setAlpha(0);
+
+  scene.tweens.add({ targets: rewardScene, alpha: 1, duration: 500 });
+  scene.tweens.add({ targets: professor, y: 278, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+}
+
+function mostrarDialegProfessor(scene){
+  const dialogueNodes = {
+    start: {
+      text: 'Hola Cuc...',
+      responses: [
+        { text: 'Hola professor!', next: 'agraiment' },
+        { text: 'Què ha passat?', next: 'agraiment' },
+        { text: 'Quina sorpresa !', next: 'agraiment' }
+      ]
+    },
+    agraiment: {
+      text: 'Jo i tots els Pokémon estem molt contents. Ens has ajudat molt a reconstruir el nostre hàbitat.',
+      responses: [
+        { text: 'Ho he fet amb molt amor.', next: 'emocions' },
+        { text: 'Era casa vostra. Calia cuidar-la.', next: 'emocions' },
+        { text: 'Encara queda feina per fer?', next: 'feina' }
+      ]
+    },
+    feina: {
+      text: 'Sempre queda alguna cosa per plantar, ordenar o arreglar... però avui no toca treballar. Avui toca celebrar-te.',
+      responses: [
+        { text: 'Això sona sospitós.', next: 'emocions' },
+        { text: "Celebrar-me? M'agrada.", next: 'emocions' }
+      ]
+    },
+    emocions: {
+      text: 'Has portat calma, alegria i una mica de màgia a aquest lloc. Per això et tenim moltíssima estima.',
+      responses: [
+        { text: 'Jo també us estimo molt.', next: 'sorpresa' },
+        { text: "M'esteu emocionant.", next: 'sorpresa' },
+        { text: 'Professor, digues la veritat.', next: 'sorpresa' }
+      ]
+    },
+    sorpresa: {
+      text: 'Avui, pel teu aniversari, hem preparat una sorpresa especial dins del generador de recompenses.',
+      responses: [
+        { text: 'Una recompensa?', next: 'repte' },
+        { text: "Explica-m'ho!", next: 'repte' },
+        { text: 'Ja sabia que tramaveu alguna cosa.', next: 'repte' }
+      ]
+    },
+    repte: {
+      text: 'Si aconsegueixes realitzar un últim repte, desbloquejaràs aquesta nova recompensa feta només per tu.',
+      responses: [
+        { text: 'Som-hi!', next: 'end' },
+        { text: 'Estic preparada!', next: 'end' },
+        { text: 'Pel generador de recompenses!', next: 'end' }
+      ]
+    }
+  };
+
+  let currentNode = 'start';
+  let currentText;
+  let currentResponses = [];
+
+  const bg = drawPastelBackdrop(scene, 110);
+  const habitat = roundedPanel(scene, 400, 276, 700, 300, 0xd8f8a8, 0x69c784, 111);
+  const professor = scene.add.image(255, 285, 'professorTangrouth')
+    .setDisplaySize(265, 265)
+    .setDepth(112);
+  const playerGlow = scene.add.graphics().setDepth(112);
+  playerGlow.fillStyle(0xffffff, 0.72);
+  playerGlow.fillCircle(575, 285, 72);
+  playerGlow.fillStyle(0xffd5e7, 0.72);
+  playerGlow.fillCircle(575, 285, 58);
+  playerGlow.lineStyle(5, 0xffffff, 0.95);
+  playerGlow.strokeCircle(575, 285, 68);
+
+  const dialogBox = scene.add.graphics().setDepth(120);
+  dialogBox.fillStyle(0x715b8b, 0.16);
+  dialogBox.fillRoundedRect(56, 438, 704, 128, 32);
+  dialogBox.fillStyle(0xffffff, 0.98);
+  dialogBox.lineStyle(6, 0xd8c7ff, 1);
+  dialogBox.fillRoundedRect(48, 430, 704, 128, 32);
+  dialogBox.strokeRoundedRect(48, 430, 704, 128, 32);
+  dialogBox.lineStyle(2, 0xfff7c8, 1);
+  dialogBox.strokeRoundedRect(64, 446, 672, 96, 24);
+
+  const nameTag = scene.add.text(95, 418, 'Professor Tangrouth', {
+    fontFamily: 'monospace',
+    fontSize: '20px',
+    color: '#ffffff',
+    fontStyle: 'bold',
+    backgroundColor: '#79b9bc',
+    padding: { x: 18, y: 6 }
+  }).setDepth(122);
+
+  const nextStep = ()=>{
+    if(currentNode === 'end'){
+      currentResponses.forEach(item=> item.destroy());
+      currentResponses = [];
+      if(currentText) currentText.destroy();
+      dialogueScene.destroy();
+      mostrarPantallaRepte(scene);
+      return;
+    }
+
+    currentResponses.forEach(item=> item.destroy());
+    currentResponses = [];
+    if(currentText) currentText.destroy();
+
+    const step = dialogueNodes[currentNode];
+    currentText = scene.add.text(84, 468, step.text, {
+      fontFamily: 'monospace',
+      fontSize: '20px',
+      color: pastel.text,
+      fontStyle: 'bold',
+      lineSpacing: 8,
+      wordWrap: { width: 620, useAdvancedWrap: true }
+    }).setDepth(123);
+
+    const responses = step.responses || [{ text: 'Continua', next: 'end' }];
+    responses.forEach((response, idx)=>{
+      currentResponses.push(respostaButton(scene, 495, 132 + idx * 56, 250, response.text, ()=>{
+        sfxSelect.play();
+        currentNode = response.next;
+        nextStep();
+      }));
+    });
+  };
+
+  dialogueScene = scene.add.container(0, 0, [
+    bg, habitat, professor, playerGlow, dialogBox, nameTag
+  ]).setDepth(110);
+
+  nextStep();
+}
 
 function preload(){
   // imatges
   this.load.image('background','assets/bg.png');
-  this.load.image('beach','assets/puntuacio.png');
+  this.load.image('beach','assets/beach.png');
   this.load.image('inici','assets/inici.png');
   this.load.image('inici2','assets/inici2.png');
   this.load.image('pchan','assets/pchan.png');
@@ -118,10 +910,14 @@ function preload(){
   this.load.image('cartuSel','assets/cartuselector.png');
   this.load.image('rataSel','assets/rataselector.png');
   this.load.image('presentacio','assets/Presentacio.png');
+  this.load.image('professorTangrouth','assets/Tangela.png');
   this.load.image('menufons','assets/inici.png');
+  this.load.image('charmanderReward','assets/charmander-red-party-hat.png');
   // música
   this.load.audio('menuMusic','assets/menu.mp3');
   this.load.audio('gameMusic','assets/dive.mp3');
+  this.load.audio('pokopiaMusic','assets/Pokopia1.mp3');
+  this.load.audio('rewardMusic','assets/Title Screen Theme.mp3');
   // efectes
   this.load.audio('select','assets/select.wav');
   this.load.audio('splash','assets/splash.wav');
@@ -130,60 +926,96 @@ function preload(){
 }
 
 function create(){
+  setupManualInput();
+  enableCrispText(this);
+
   // àudio
   menuMusic = this.sound.add('menuMusic',{ loop:true, volume:0.5 });
   gameMusic = this.sound.add('gameMusic',{ loop:true, volume:0.5 });
+  pokopiaMusic = this.sound.add('pokopiaMusic',{ loop:true, volume:0.5 });
+  rewardMusic = this.sound.add('rewardMusic',{ loop:true, volume:0.5 });
   sfxSelect = this.sound.add('select',{ volume:0.5 });
   sfxSplash = this.sound.add('splash',{ volume:0.8 });
   sfxWaves  = this.sound.add('onades',{ loop:true, volume:0.2 });
   sfxCheck  = this.sound.add('check',{ volume:0.8 });
 
   // música de menú i efecte onades
-  menuMusic.play();
+  playPokopiaMusic();
   sfxWaves.play();
 
   // presentació
-  presentacio = this.add.image(400,300,'presentacio')
-    .setDepth(100).setAlpha(0).setDisplaySize(800,600);
-  this.tweens.add({ targets: presentacio, alpha:1, duration:7000 });
-  presentacio.setInteractive().on('pointerdown', ()=>{
+  const introBg = drawPastelBackdrop(this, 100);
+  const introPanel = roundedPanel(this, 400, 300, 660, 420, 0xfff3cf, 0xff9fc8, 101);
+  const introAccent = this.add.graphics().setDepth(102);
+  introAccent.fillStyle(0xff9fc8, 1);
+  introAccent.fillRoundedRect(184, 150, 432, 10, 6);
+  introAccent.fillStyle(0x9ee86a, 1);
+  introAccent.fillRoundedRect(246, 166, 308, 8, 5);
+  const introTitle = pastelText(this, 400, 120, "UNA NIT ESTRANYA", 38, pastel.text, 102);
+  const introPages = [
+    "Has tingut una setmana dura: tot el cap de setmana escalant a Prades, entre setmana presentant el teu projecte de tesi, treballant, fent tutories...",
+    "Has estat preparant l'encàrrec del comiat de la Lusi i planificant el viatge de l'estiu <3.\n\nArribes a casa cansada, però amb la sensació que les coses han anat bé.",
+    "Aquesta nit fas anys. La celebració és demà, així que et disposes a relaxar-te: potser posar una rutina, potser llegir una mica...\n\nPerò notes una presència estranya dins de casa i... ohhh, tiriririririri, chan chan chan chan..."
+  ];
+  let introPage = 0;
+  const introStory = this.add.text(400, 292, introPages[introPage], {
+    fontFamily: 'monospace',
+    fontSize: '20px',
+    color: pastel.text,
+    fontStyle: 'bold',
+    align: 'left',
+    lineSpacing: 9,
+    wordWrap: { width: 555, useAdvancedWrap: true }
+  }).setOrigin(0.5).setDepth(102).setStroke('#ffffff', 3);
+  const introCounter = pastelText(this, 400, 464, '1/3', 18, '#6c6b4f', 102);
+  const introStart = menuButton(this, 400, 522, 'CONTINUAR', 26).setDepth(102);
+  presentacio = this.add.container(0, 0, [introBg, introPanel, introAccent, introTitle, introStory, introCounter, introStart])
+    .setDepth(100).setAlpha(0).setSize(800, 600);
+  this.tweens.add({ targets: presentacio, alpha:1, duration:900 });
+  registerManualButton(introStart, introStart.manualBounds, ()=>{
     sfxCheck.play();
+    introPage += 1;
+    if(introPage < introPages.length){
+      introStory.setText(introPages[introPage]);
+      introCounter.setText(`${introPage + 1}/3`);
+      return;
+    }
+
     this.tweens.add({
-      targets: presentacio, alpha:0, duration:7000,
-      onComplete: ()=>{ presentacio.destroy(); mostrarMenu.call(this); }
+      targets: presentacio, alpha:0, duration:700,
+      onComplete: ()=>{ presentacio.destroy(); mostrarDialegProfessor(this); }
     });
-  });
+  }, introStart.manualHover);
 }
 
 function mostrarMenu(){
   // música menú
   if(gameMusic.isPlaying) gameMusic.stop();
-  if(!menuMusic.isPlaying) menuMusic.play();
+  playPokopiaMusic();
 
-  menuInici = this.add.image(400,300,'menufons')
-    .setAlpha(0).setDisplaySize(800,600);
-  this.tweens.add({ targets: menuInici, alpha:1, duration:1000 });
+  menuInici = drawPastelBackdrop(this).setAlpha(0);
+  menuDecor = this.add.container(0, 0, [
+    roundedPanel(this, 400, 170, 560, 160, 0xfff3cf, 0x69c784, 1),
+    pastelText(this, 400, 140, 'RESPIRA AMB MI', 48, pastel.text, 2),
+    pastelText(this, 400, 198, "edició d'aniversari", 24, '#7a8c5f', 2)
+  ]).setAlpha(0);
+  this.tweens.add({ targets: [menuInici, menuDecor], alpha:1, duration:700 });
 
-  jugarText = this.add.text(400,380,'JUGAR',{ fontFamily:'monospace', fontSize:'40px', color:'#cc99ff',
-      fontStyle:'bold', backgroundColor:'#000', padding:{x:20,y:10}, align:'center'
-    }).setOrigin(0.5).setInteractive().setAlpha(0).setStroke('#cc99ff',3);
-
-  canviText = this.add.text(400,460,'CANVI APNEISTA',{ fontFamily:'monospace', fontSize:'30px', color:'#cc99ff',
-      fontStyle:'bold', backgroundColor:'#000', padding:{x:20,y:10}, align:'center'
-    }).setOrigin(0.5).setInteractive().setAlpha(0).setStroke('#cc99ff',3);
+  jugarText = menuButton(this, 400, 370, 'JUGAR', 40).setAlpha(0);
+  canviText = menuButton(this, 400, 455, 'CANVI APNEISTA', 28).setAlpha(0);
 
   // selector d’apneista
-  canviText.on('pointerdown', ()=>{
+  registerManualButton(canviText, canviText.manualBounds, ()=>{
     sfxCheck.play();
-    const title = this.add.text(400,100,'SELECCIONA EL TEU APNEISTA',{
-      fontFamily:'monospace', fontSize:'28px', color:'#cc99ff', fontStyle:'bold'
-    }).setOrigin(0.5);
+    const title = pastelText(this, 400, 95, 'SELECCIONA EL TEU APNEISTA', 28, pastel.text, 3);
 
     menuInici.setAlpha(0);
-    jugarText.setAlpha(0);
-    canviText.setAlpha(0);
+    menuDecor.setAlpha(0);
+    jugarText.setAlpha(0).setActive(false);
+    canviText.setAlpha(0).setActive(false);
 
-    const selectorBg = this.add.image(400,300,'inici2').setDisplaySize(800,600);
+    const selectorBg = drawPastelBackdrop(this, 1);
+    const selectorPanel = roundedPanel(this, 400, 330, 680, 300, 0xfff3cf, 0xff9fc8, 2);
 
     const options = [
       { selKey:'cartuSel', gameKey:'cartu', name:'CARTU' },
@@ -195,64 +1027,75 @@ function mostrarMenu(){
       const spacing = 200;
       const x = 400 - ((options.length-1)*spacing)/2 + idx*spacing;
 
+      const card = roundedPanel(this, x, 330, 170, 215, 0xd8f8a8, 0x69c784, 3);
       const sprite = this.add.image(x,300,opt.selKey)
-        .setDisplaySize(200,200).setInteractive();
+        .setDisplaySize(145,145).setInteractive().setDepth(4);
       const label = this.add.text(x,440,opt.name,{
-        fontFamily:'monospace', fontSize:'24px', color:'#9933ff', fontStyle:'bold'
-      }).setOrigin(0.5);
+        fontFamily:'monospace', fontSize:'22px', color:pastel.text, fontStyle:'bold'
+      }).setOrigin(0.5).setStroke('#fff7c8', 4).setDepth(4);
+      const hitZone = this.add.zone(x, 330, 170, 215).setDepth(5);
 
-      // hover més fosc
-      sprite.on('pointerover', () => {
-        sprite.setTint(0x444444);
-        sfxCheck.play();  // Reprodueix el so al passar el cursor
-      }).on('pointerout', () => {
-        sprite.clearTint();
-      });
-
-      // al clicar
-      sprite.on('pointerdown', ()=>{
+      const selectOption = ()=>{
         sfxSelect.play();
         diverSelection = opt.gameKey;
         selectorBg.destroy();
+        selectorPanel.destroy();
         title.destroy();
         options.forEach(o=>{
+          o.card && o.card.destroy();
           o.sprite && o.sprite.destroy();
           o.label  && o.label.destroy();
+          o.hitZone && o.hitZone.destroy();
         });
         menuInici.setAlpha(1);
-        jugarText.setAlpha(1);
-        canviText.setAlpha(1);
-      });
+        menuDecor.setAlpha(1);
+        jugarText.setAlpha(1).setActive(true);
+        canviText.setAlpha(1).setActive(true);
+      };
 
+      registerManualButton(
+        hitZone,
+        { x: x - 85, y: 330 - 107.5, width: 170, height: 215 },
+        selectOption,
+        (hovered)=>{
+          if(hovered){
+            sprite.setTint(0xffd5e7);
+            sfxCheck.play();
+          } else {
+            sprite.clearTint();
+          }
+        }
+      );
+
+      opt.card = card;
       opt.sprite = sprite;
       opt.label  = label;
+      opt.hitZone = hitZone;
     });
-  });
+  }, canviText.manualHover);
 
   this.tweens.add({ targets:[jugarText, canviText], alpha:1, duration:1000 });
-  [jugarText, canviText].forEach(txt=>{
-    txt.on('pointerover', ()=> txt.setScale(1.1))
-       .on('pointerout',  ()=> txt.setScale(1));
-  });
-
   // JUGAR
-  jugarText.on('pointerdown', ()=>{
+  registerManualButton(jugarText, jugarText.manualBounds, ()=>{
     sfxSplash.play();
     this.tweens.add({
-      targets:[jugarText, canviText, menuInici], alpha:0, duration:1000,
+      targets:[jugarText, canviText, menuInici, menuDecor], alpha:0, duration:700,
       onComplete: ()=>{
+        menuInici.destroy();
+        menuDecor.destroy();
+        jugarText.destroy();
+        canviText.destroy();
         document.getElementById('diveButton').style.display='inline-block';
         document.getElementById('timer').style.display='block';
         startGame.call(this);
       }
     });
-  });
+  }, jugarText.manualHover);
 }
 
 function startGame(){
   // transició música
-  if(menuMusic.isPlaying) menuMusic.stop();
-  if(!gameMusic.isPlaying) gameMusic.play();
+  playPokopiaMusic();
   sfxWaves.stop();
 
   background = this.add.tileSprite(0,0,800,600,'background').setOrigin(0,0);
@@ -268,7 +1111,7 @@ function startGame(){
 
   document.getElementById('diveButton').onclick = ()=>{
     isScrolling = !isScrolling;
-    document.getElementById('diveButton').textContent = isScrolling ? 'Respira' : 'Dive!';
+    document.getElementById('diveButton').textContent = isScrolling ? 'Respira' : 'Busseja';
     if(isScrolling){
       background.setVisible(true);
       beachImage.setVisible(false);
@@ -289,13 +1132,13 @@ function startGame(){
       document.getElementById('diveButton').style.display='none';
       document.getElementById('timer').style.display='none';
 
-      // mostra Final Time
+      // mostra el temps final
       const ms = elapsedTime;
       const m  = Math.floor(ms/60000),
             s  = Math.floor((ms%60000)/1000),
             c  = Math.floor((ms%1000)/10);
       const ft = `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}:${c.toString().padStart(2,'0')}`;
-      document.getElementById('finalScore').textContent=`Final Time: ${ft}`;
+      document.getElementById('finalScore').textContent=`Temps final: ${ft}`;
       document.getElementById('finalScore').style.display='block';
 
       // Top5 i UI final (igual que abans)...
