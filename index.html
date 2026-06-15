@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>APNEA SIMULATOR</title>
+  <title>HOLA CUC</title>
   <link rel="icon" type="image/png" href="assets/charmander.png">
   <script src="assets/vendor/phaser.min.js"></script>
   <style>
@@ -121,7 +121,7 @@ let scrollSpeed = 0.1, isScrolling = false, elapsedTime = 0;
 let menuMusic, gameMusic, pokopiaMusic, rewardMusic, sfxSelect, sfxSplash, sfxWaves;
 let presentacio, menuInici, jugarText, canviText, menuDecor, dialogueScene, challengeScene, rewardScene;
 let diverSelection = 'cartu';
-const REWARD_LOCATION_TEXT = 'Ves a buscar el Charmander, ell guarda el teu regalet!';
+const REWARD_LOCATION_TEXT = 'Ves a buscar el Yoshito, ell guarda el teu regalet!';
 const manualButtons = [];
 
 const pastel = {
@@ -727,7 +727,7 @@ function mostrarPantallaRecompensaProfessor(scene){
   hintPanelBg.fillRoundedRect(0, 0, 250, 126, 20);
   hintPanelBg.strokeRoundedRect(0, 0, 250, 126, 20);
   const hintPchan = scene.add.image(52, 62, 'pchan').setDisplaySize(70, 60);
-  const hintText = scene.add.text(98, 24, 'Pregunta al Pokémon Baconet perquè et guiï fins al Charmander.', {
+  const hintText = scene.add.text(98, 24, 'Pregunta al Pokémon Baconet perquè et guiï fins al Yooshito.', {
     fontFamily: 'monospace',
     fontSize: '15px',
     color: '#4e3151',
@@ -951,11 +951,11 @@ function create(){
   introAccent.fillRoundedRect(184, 150, 432, 10, 6);
   introAccent.fillStyle(0x9ee86a, 1);
   introAccent.fillRoundedRect(246, 166, 308, 8, 5);
-  const introTitle = pastelText(this, 400, 120, "UNA NIT ESTRANYA", 38, pastel.text, 102);
+  const introTitle = pastelText(this, 400, 120, "UNA SETMANA ESTRANYA", 38, pastel.text, 102);
   const introPages = [
     "Has tingut una setmana dura: tot el cap de setmana escalant a Prades, entre setmana presentant el teu projecte de tesi, treballant, fent tutories...",
     "Has estat preparant l'encàrrec del comiat de la Lusi i planificant el viatge de l'estiu <3.\n\nArribes a casa cansada, però amb la sensació que les coses han anat bé.",
-    "Aquesta nit fas anys. La celebració és demà, així que et disposes a relaxar-te: potser posar una rutina, potser llegir una mica...\n\nPerò notes una presència estranya dins de casa i... ohhh, tiriririririri, chan chan chan chan..."
+    "Avui fas anys. vens del gimnàs, notes una presència estranya dins de casa i... ohhh, tiriririririri, chan chan chan chan..."
   ];
   let introPage = 0;
   const introStory = this.add.text(400, 292, introPages[introPage], {
